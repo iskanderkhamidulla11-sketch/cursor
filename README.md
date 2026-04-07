@@ -53,6 +53,9 @@ git push -u origin main
 
 ## Запуск
 
+1. Установите ngrok: https://ngrok.com/download (для доступа к API из Mini App).
+
+2. Запустите бота:
 ```powershell
 cd backend
 python -m venv venv
@@ -61,7 +64,18 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Бот запустится с API сервером на http://localhost:8080 для Mini App.
+3. В другом терминале запустите ngrok:
+```powershell
+ngrok http 8080
+```
+Получите URL, например `https://abc.ngrok.io`.
+
+4. В `frontend/script.js` измените `apiBase` на ваш ngrok URL:
+```javascript
+const apiBase = 'https://abc.ngrok.io';  // вместо 'http://localhost:8080'
+```
+
+Теперь Mini App сможет получать данные.
 
 ## API Endpoints
 

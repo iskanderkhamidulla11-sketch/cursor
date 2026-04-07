@@ -2,13 +2,17 @@ const tg = window.Telegram?.WebApp;
 const statusEl = document.getElementById("status");
 let currentDealId = 0;
 let activeFilter = "active";
+let currentUserId = 0;
 // Last sent payload dedupe (prevent accidental repeated sends)
 let __lastSent = { payload: null, ts: 0 };
-let userId = tg?.initDataUnsafe?.user?.id || 0;
+
+// Change this to your ngrok URL for Mini App to work
+const apiBase = 'http://localhost:8080';
 
 if (tg) {
   tg.ready();
   tg.expand();
+  currentUserId = tg.initDataUnsafe?.user?.id || 0;
 }
 
 function setStatus(text) {
@@ -49,8 +53,8 @@ function sendAction(payload) {
 
 async function fetchAPI(endpoint, params = {}) {
   try {
-    const url = new URL(`http://localhost:8080${endpoint}`);
-    url.searchParams.set('user_id', userId);
+    const url = new URL(`${apiBase}${endpoint}`);
+    url.searchParams.set('user_id', currentUserId);
     Object.keys(params).forEach(key => url.searchParams.set(key, params[key]));
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
