@@ -150,6 +150,8 @@ document.getElementById("createDealBtn").addEventListener("click", () => {
   }
   sendAction({ action: "create_deal", target_username: username, amount, description });
   document.getElementById("createDealModal").classList.add("hidden");
+  // Refresh deals list after creation
+  setTimeout(() => sendAction({ action: "list_deals", status_filter: activeFilter }), 500);
 });
 
 document.getElementById("topupStarsBtn").onclick = () => sendAction({ action: "topup_stars", amount: intValue("topupAmount") });
