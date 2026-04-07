@@ -266,52 +266,15 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
         return
 
     if action == "list_deals":
-        status_filter = str(payload.get("status_filter", "active"))
-        deals = list_user_deals_by_filter(user_id, status_filter)
-        lines = ["Ваши сделки:"]
-        if not deals:
-            lines.append("- пусто")
-        for row in deals:
-            role = "buyer" if int(row["buyer_id"]) == user_id else "seller"
-            counterpart = row["seller_username"] or row["buyer_username"] or "unknown"
-            lines.append(
-                f"- #{row['id']} {row['status']} | роль: {role} | сумма: {row['amount']} RUB | c: {counterpart}"
-            )
-        await message.answer("\n".join(lines))
+        # Now handled via API, no chat message
         return
 
     if action == "get_profile":
-        stats = get_profile_stats(user_id)
-        lines = [
-            f"Баланс: {stats['balance']} RUB",
-            f"Рейтинг: {stats['rating_avg']:.1f} ({stats['rating_count']} отзывов)",
-            f"Сделок: {stats['deals_count']}",
-        ]
-        if stats['reviews']:
-            lines.append("\nПоследние отзывы:")
-            for r in stats['reviews'][:3]:
-                lines.append(f"- {r['rating']}/5: {r['text'][:50]}...")
-        await message.answer("\n".join(lines))
+        # Now handled via API
         return
 
     if action == "get_deal":
-        deal_id = parse_int(payload, "deal_id")
-        deal = get_deal(deal_id)
-        if not deal or (user_id not in (int(deal["buyer_id"]), int(deal["seller_id"]))):
-            await message.answer("Сделка не найдена или нет доступа.")
-            return
-        role = "buyer" if int(deal["buyer_id"]) == user_id else "seller"
-        status = deal["status"]
-        amount = deal["amount"]
-        desc = deal["description"] or "-"
-        lines = [
-            f"Сделка #{deal_id}",
-            f"Статус: {status}",
-            f"Роль: {role}",
-            f"Сумма: {amount} RUB",
-            f"Описание: {desc}",
-        ]
-        await message.answer("\n".join(lines))
+        # Now handled via API
         return
 
     if action == "accept_deal":

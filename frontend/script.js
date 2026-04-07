@@ -4,6 +4,7 @@ let currentDealId = 0;
 let activeFilter = "active";
 // Last sent payload dedupe (prevent accidental repeated sends)
 let __lastSent = { payload: null, ts: 0 };
+let userId = tg?.initDataUnsafe?.user?.id || 0;
 
 if (tg) {
   tg.ready();
@@ -46,6 +47,17 @@ function sendAction(payload) {
   }
 }
 
+async function fetchAPI(endpoint) {
+  try {
+    const response = await fetch(`http://localhost:8080${endpoint}`);
+    if (!response.ok) throw new Error('API error');
+    return await response.json();
+  } catch (e) {
+    console.error('fetchAPI error', e);
+    return null;
+  }
+}
+
 function showScreen(name) {
   document.querySelectorAll(".screen").forEach((x) => x.classList.remove("active"));
   document.querySelectorAll(".nav-btn").forEach((x) => x.classList.remove("active"));
@@ -53,9 +65,13 @@ function showScreen(name) {
   document.querySelector(`.nav-btn[data-screen="${name}"]`)?.classList.add("active");
 }
 
-function renderDeals() {
+async function renderDeals() {
   const list = document.getElementById("dealsList");
-  const deals = JSON.parse(localStorage.getItem(`deals:${activeFilter}`) || "[]");
+  const deals = await fetchAPI(`/api/deals?user_id=${userId}&status_filter=${activeFilter}`);
+  if (!deals || deals.error) {
+    list.innerHTML = "<p>Ошибка загрузки сделок.</p>";
+    return;
+  }
   if (!deals.length) {
     list.innerHTML = "<p>Сделок пока нет.</p>";
     return;
@@ -74,15 +90,18 @@ function renderDeals() {
   });
 }
 
-function openDeal(dealId) {
+async function openDeal(dealId) {
   currentDealId = dealId;
-  const key = `deal:${dealId}`;
-  const data = JSON.parse(localStorage.getItem(key) || "{}");
+  const deal = await fetchAPI(`/api/deal/${dealId}?user_id=${userId}`);
+  if (!deal || deal.error) {
+    setStatus("Ошибка загрузки сделки.");
+    return;
+  }
   const box = document.getElementById("dealDetails");
   box.innerHTML = `
     <h3>Сделка #${dealId}</h3>
-    <p><b>Статус:</b> ${data.status || "-"}</p>
-    <p><b>Сумма:</b> ${data.amount || 0} RUB</p>
+    <p><b>Статус:</b> ${deal.status || "-"}</p>
+    <p><b>Сумма:</b> ${deal.amount || 0} RUB</p>
     <div class="grid2">
       <button type="button" id="acceptDealBtn">Принять</button>
       <button type="button" id="deliverDealBtn">Выполнено</button>
@@ -94,31 +113,48 @@ function openDeal(dealId) {
       <button type="button" id="refreshChatBtn">Обновить чат</button>
     </div>
   `;
-  document.getElementById("acceptDealBtn").onclick = () => sendAction({ action: "accept_deal", deal_id: dealId });
-  document.getElementById("deliverDealBtn").onclick = () => sendAction({ action: "mark_delivered", deal_id: dealId });
-  document.getElementById("confirmDealBtn").onclick = () => sendAction({ action: "confirm_deal", deal_id: dealId });
-  document.getElementById("cancelDealBtn").onclick = () => sendAction({ action: "cancel_deal", deal_id: dealId });
-  document.getElementById("refundDealBtn").onclick = () => sendAction({ action: "cancel_deal", deal_id: dealId });
-  document.getElementById("refreshChatBtn").onclick = () => {
-    // Request server to send chat history as fallback message
-    sendAction({ action: "list_chat_messages", deal_id: dealId });
-    // Also re-render local chat
-    renderChat(dealId);
+  document.getElementById("acceptDealBtn").onclick = async () => {
+    sendAction({ action: "accept_deal", deal_id: dealId });
+    setTimeout(async () => await openDeal(dealId), 500); // refresh
+  };
+  document.getElementById("deliverDealBtn").onclick = async () => {
+    sendAction({ action: "mark_delivered", deal_id: dealId });
+    setTimeout(async () => await openDeal(dealId), 500);
+  };
+  document.getElementById("confirmDealBtn").onclick = async () => {
+    sendAction({ action: "confirm_deal", deal_id: dealId });
+    setTimeout(async () => await openDeal(dealId), 500);
+  };
+  document.getElementById("cancelDealBtn").onclick = async () => {
+    sendAction({ action: "cancel_deal", deal_id: dealId });
+    setTimeout(async () => await openDeal(dealId), 500);
+  };
+  document.getElementById("refundDealBtn").onclick = async () => {
+    sendAction({ action: "cancel_deal", deal_id: dealId });
+    setTimeout(async () => await openDeal(dealId), 500);
   };
   showScreen("deal-view");
+  await renderChat(dealId);
 }
 
-function renderChat(dealId) {
-  const list = document.getElementById("chatList");
-  const messages = JSON.parse(localStorage.getItem(`chat:${dealId}`) || "[]");
-  list.innerHTML = messages
-    .map((m) => `<div class="msg"><b>${m.username || m.sender_id}:</b> ${m.text}</div>`)
-    .join("");
+async async function loadProfile() {
+  const profile = await fetchAPI(`/api/profile?user_id=${userId}`);
+  if (!profile || profile.error) return;
+  document.getElementById("profileBalance").textContent = `${profile.balance} RUB`;
+  document.getElementById("profileRating").textContent = profile.rating_avg.toFixed(1);
+  document.getElementById("profileDeals").textContent = profile.deals_count;
+  const reviewsEl = document.getElementById("profileReviews");
+  reviewsEl.innerHTML = profile.reviews.map(r => `<p>${r.rating}/5: ${r.text}</p>`).join("");
 }
 
 document.querySelectorAll(".nav-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", async () => {
     showScreen(btn.dataset.screen);
+    if (btn.dataset.screen === "profile") {
+      await loadProfile();
+    } else if (btn.dataset.screen === "deals") {
+      await renderDeals();
+    }
   });
 });
 
@@ -131,16 +167,15 @@ document.getElementById("backToDealsBtn").onclick = () => {
 };
 
 document.querySelectorAll(".filter").forEach((btn) => {
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", async () => {
     document.querySelectorAll(".filter").forEach((x) => x.classList.remove("active"));
     btn.classList.add("active");
     activeFilter = btn.dataset.filter;
-    sendAction({ action: "list_deals", status_filter: activeFilter });
-    renderDeals();
+    await renderDeals();
   });
 });
 
-document.getElementById("createDealBtn").addEventListener("click", () => {
+document.getElementById("createDealBtn").addEventListener("click", async () => {
   const username = normalizeUsername(strValue("dealUsername"));
   const amount = intValue("dealAmount");
   const description = strValue("dealDescription");
@@ -151,7 +186,7 @@ document.getElementById("createDealBtn").addEventListener("click", () => {
   sendAction({ action: "create_deal", target_username: username, amount, description });
   document.getElementById("createDealModal").classList.add("hidden");
   // Refresh deals list after creation
-  setTimeout(() => sendAction({ action: "list_deals", status_filter: activeFilter }), 500);
+  setTimeout(async () => await renderDeals(), 500);
 });
 
 document.getElementById("topupStarsBtn").onclick = () => sendAction({ action: "topup_stars", amount: intValue("topupAmount") });
@@ -167,28 +202,14 @@ document.getElementById("withdrawBtn").onclick = () => {
   });
 };
 
-document.getElementById("sendChatBtn").onclick = () => {
+document.getElementById("sendChatBtn").onclick = async () => {
   const text = strValue("chatMessageInput");
   if (!text || !currentDealId) return;
   // send to bot
   sendAction({ action: "send_chat_message", deal_id: currentDealId, text });
-  // persist locally for immediate UI update
-  try {
-    const msg = {
-      sender_id: tg?.initDataUnsafe?.user?.id || 'me',
-      username: tg?.initDataUnsafe?.user?.username || (tg?.initDataUnsafe?.user?.first_name || 'me'),
-      text: text,
-      ts: Date.now(),
-    };
-    const key = `chat:${currentDealId}`;
-    const arr = JSON.parse(localStorage.getItem(key) || '[]');
-    arr.push(msg);
-    localStorage.setItem(key, JSON.stringify(arr));
-    renderChat(currentDealId);
-  } catch (e) {
-    console.error('chat save', e);
-  }
+  // update UI immediately
   document.getElementById("chatMessageInput").value = "";
+  await renderChat(currentDealId);
 };
 
 // No automatic message handlers — actions must be initiated by user interactions.
