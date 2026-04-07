@@ -1,73 +1,124 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Сделки FunPay</title>
+  <title>FunPay Mini App</title>
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <main class="container">
-    <header class="header">
-      <h1>Сделки FunPay</h1>
-      <p>Безопасные сделки, баланс и отзывы.</p>
+  <main class="app">
+    <header class="topbar">
+      <h1>FunPay</h1>
+      <p>Безопасные сделки и гарантия.</p>
     </header>
 
-    <nav class="tabs">
-      <button type="button" class="tab active" data-tab="deals">Сделки</button>
-      <button type="button" class="tab" data-tab="balance">Баланс</button>
-      <button type="button" class="tab" data-tab="reviews">Отзывы</button>
-      <button type="button" class="tab" data-tab="withdraw">Вывод</button>
-    </nav>
-
-    <section class="panel active" id="panel-deals">
-      <h2>Создать сделку</h2>
-      <label for="dealUsername">Username продавца</label>
-      <input id="dealUsername" type="text" placeholder="@seller_username" maxlength="64" />
-      <label for="dealAmount">Сумма (RUB)</label>
-      <input id="dealAmount" type="number" min="1" step="1" placeholder="100" />
-      <label for="dealDescription">Описание</label>
-      <textarea id="dealDescription" placeholder="Что нужно выполнить?"></textarea>
-      <button id="createDealBtn" type="button">Создать эскроу-сделку</button>
-    </section>
-
-    <section class="panel" id="panel-balance">
-      <h2>Пополнение</h2>
-      <label for="topupAmount">Сумма (RUB)</label>
-      <input id="topupAmount" type="number" min="1" step="1" placeholder="50" />
-      <div class="row">
-        <button id="topupStarsBtn" type="button">Пополнить через Stars</button>
-        <button id="topupCryptoBtn" type="button" class="secondary">Пополнить через CryptoBot</button>
+    <section class="screen active" id="screen-main">
+      <h2>Главная</h2>
+      <p>Создавайте сделки, следите за балансом и общайтесь с партнером прямо в приложении.</p>
+      <div class="card">
+        <h3>Быстрые действия</h3>
+        <div class="grid2">
+          <button id="goCreateDealBtn" type="button">Создать сделку</button>
+          <button id="goDealsBtn" type="button" class="secondary">Мои сделки</button>
+        </div>
       </div>
-      <label for="cryptoInvoiceId">ID счета CryptoBot (для проверки)</label>
-      <input id="cryptoInvoiceId" type="text" placeholder="invoice id" />
-      <button id="checkCryptoBtn" type="button">Проверить оплату CryptoBot</button>
     </section>
 
-    <section class="panel" id="panel-reviews">
-      <h2>Оставить отзыв</h2>
-      <label for="reviewDealId">ID сделки</label>
-      <input id="reviewDealId" type="number" min="1" step="1" placeholder="12" />
-      <label for="reviewRating">Оценка (1-5)</label>
-      <input id="reviewRating" type="number" min="1" max="5" step="1" placeholder="5" />
-      <label for="reviewText">Текст</label>
-      <textarea id="reviewText" placeholder="Опишите ваш опыт"></textarea>
-      <button id="sendReviewBtn" type="button">Отправить отзыв</button>
+    <section class="screen" id="screen-profile">
+      <h2>Профиль</h2>
+      <div class="card">
+        <p><b>Баланс:</b> <span id="profileBalance">0 RUB</span></p>
+        <p><b>Рейтинг:</b> <span id="profileRating">0</span></p>
+        <p><b>Сделок:</b> <span id="profileDeals">0</span></p>
+      </div>
+      <details>
+        <summary>Отзывы</summary>
+        <div id="profileReviews" class="list"></div>
+      </details>
+      <div class="card">
+        <h3>Пополнение</h3>
+        <label for="topupAmount">Сумма (RUB)</label>
+        <input id="topupAmount" type="number" min="1" step="1" placeholder="100" />
+        <div class="grid2">
+          <button id="topupStarsBtn" type="button">Через Stars</button>
+          <button id="topupCryptoBtn" type="button" class="secondary">Через CryptoBot</button>
+        </div>
+        <label for="cryptoInvoiceId">ID инвойса CryptoBot</label>
+        <input id="cryptoInvoiceId" type="text" placeholder="invoice id" />
+        <button id="checkCryptoBtn" type="button">Проверить оплату</button>
+      </div>
     </section>
 
-    <section class="panel" id="panel-withdraw">
+    <section class="screen" id="screen-deals">
+      <div class="row">
+        <h2>Сделки</h2>
+        <button id="openCreateDealBtn" type="button">+ Создать</button>
+      </div>
+      <div class="grid3">
+        <button class="filter active" data-filter="active" type="button">Активные</button>
+        <button class="filter" data-filter="completed" type="button">Завершенные</button>
+        <button class="filter" data-filter="cancelled" type="button">Отмененные</button>
+      </div>
+      <div id="dealsList" class="list"></div>
+    </section>
+
+    <section class="screen" id="screen-withdraw">
       <h2>Вывод</h2>
-      <label for="withdrawAmount">Сумма (RUB)</label>
-      <input id="withdrawAmount" type="number" min="1" step="1" placeholder="70" />
-      <label for="withdrawDestination">Реквизиты CryptoBot</label>
-      <input id="withdrawDestination" type="text" placeholder="@cryptobot_or_wallet" />
-      <button id="withdrawBtn" type="button">Создать заявку на вывод</button>
+      <div class="card">
+        <label for="withdrawAmount">Сумма (RUB)</label>
+        <input id="withdrawAmount" type="number" min="1" step="1" placeholder="500" />
+        <label for="withdrawMethod">Способ вывода</label>
+        <select id="withdrawMethod">
+          <option value="card">Банковская карта</option>
+          <option value="stars">Telegram Stars</option>
+          <option value="usdt_trc20">USDT TRC20</option>
+        </select>
+        <label for="withdrawDestination">Реквизиты</label>
+        <input id="withdrawDestination" type="text" placeholder="Номер карты / кошелек / username" />
+        <button id="withdrawBtn" type="button">Создать заявку</button>
+      </div>
     </section>
+
+    <section class="screen" id="screen-deal-view">
+      <button id="backToDealsBtn" type="button" class="secondary">← Назад к сделкам</button>
+      <div id="dealDetails" class="card"></div>
+      <div class="card">
+        <h3>Чат сделки</h3>
+        <div id="chatList" class="chat-list"></div>
+        <div class="chat-input">
+          <input id="chatMessageInput" type="text" placeholder="Введите сообщение..." />
+          <button id="sendChatBtn" type="button">Отправить</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="modal hidden" id="createDealModal">
+      <div class="modal-box">
+        <h3>Создать сделку</h3>
+        <label for="dealUsername">Username продавца</label>
+        <input id="dealUsername" type="text" placeholder="@username" />
+        <label for="dealAmount">Сумма (RUB)</label>
+        <input id="dealAmount" type="number" min="1" step="1" />
+        <label for="dealDescription">Описание</label>
+        <textarea id="dealDescription" placeholder="Опишите задачу"></textarea>
+        <div class="grid2">
+          <button id="createDealBtn" type="button">Создать</button>
+          <button id="closeCreateDealBtn" type="button" class="secondary">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <button data-screen="main" class="nav-btn active" type="button">Главная</button>
+      <button data-screen="profile" class="nav-btn" type="button">Профиль</button>
+      <button data-screen="deals" class="nav-btn" type="button">Сделки</button>
+      <button data-screen="withdraw" class="nav-btn" type="button">Вывод</button>
+    </nav>
 
     <p id="status" class="status"></p>
   </main>
-
   <script src="./script.js"></script>
 </body>
 </html>

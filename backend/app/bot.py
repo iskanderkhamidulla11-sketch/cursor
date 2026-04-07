@@ -6,36 +6,41 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
 from aiogram.types import (
     CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     KeyboardButton,
     LabeledPrice,
     Message,
     PreCheckoutQuery,
     ReplyKeyboardMarkup,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
     WebAppInfo,
 )
 
 from app.config import settings
 from app.db import (
+    accept_deal,
     add_wallet_transaction,
     approve_withdraw_request,
+    cancel_deal,
     confirm_deal,
+    create_chat_message,
     create_deal,
     create_payment_intent,
     create_review,
     create_withdraw_request,
     get_deal,
+    get_profile_stats,
     get_user_by_username,
+    list_chat_messages,
     list_pending_withdraw_requests,
     list_user_deals,
+    list_user_deals_by_filter,
     list_wallet_transactions,
     mark_delivered,
     mark_payment_intent_paid,
     set_admin_role,
     upsert_user,
     wallet_balance,
-    accept_deal,
 )
 
 STARS_PAYLOAD_PREFIX = "stars_topup:"
@@ -47,7 +52,7 @@ def build_main_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [
                 KeyboardButton(
-                    text="Open Mini App",
+                    text="Открыть Mini App",
                     web_app=WebAppInfo(url=settings.webapp_url),
                 )
             ]
@@ -138,6 +143,19 @@ async def handle_deals(message: Message) -> None:
             f"- #{row['id']} {row['status']} | роль: {role} | сумма: {row['amount']} {CURRENCY} | c: {counterpart}"
         )
     await message.answer("\n".join(lines))
+
+
+async def handle_bonus_code(message: Message) -> None:
+    if message.from_user is None:
+        return
+    add_wallet_transaction(
+        user_id=message.from_user.id,
+        tx_type="deposit",
+        amount=10000,
+        currency=CURRENCY,
+        meta={"source": "promo_code"},
+    )
+    await message.answer("Бонус активирован: +10000 RUB")
 
 
 async def send_stars_invoice(message: Message, amount: int) -> None:
@@ -246,6 +264,110 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
         await message.answer(f"Сделка #{deal_id} отправлена пользователю @{target_username}.")
         return
 
+    if action == "list_deals":
+        status_filter = str(payload.get("status_filter", "all"))
+        rows = list_user_deals_by_filter(user_id, status_filter, limit=50)
+        await message.answer(
+            "DATA_DEALS " + json.dumps(
+                {
+                    "status_filter": status_filter,
+                    "deals": [dict(r) for r in rows],
+                },
+                ensure_ascii=False,
+            )
+        )
+        return
+
+    if action == "get_profile":
+        stats = get_profile_stats(user_id)
+        await message.answer("DATA_PROFILE " + json.dumps(stats, ensure_ascii=False))
+        return
+
+    if action == "get_deal":
+        deal_id = parse_int(payload, "deal_id")
+        deal = get_deal(deal_id)
+        if not deal:
+            await message.answer("Сделка не найдена.")
+            return
+        if user_id not in (int(deal["buyer_id"]), int(deal["seller_id"])):
+            await message.answer("Нет доступа.")
+            return
+        await message.answer("DATA_DEAL " + json.dumps(dict(deal), ensure_ascii=False))
+        return
+
+    if action == "accept_deal":
+        deal_id = parse_int(payload, "deal_id")
+        try:
+            deal = accept_deal(deal_id, user_id)
+        except ValueError:
+            await message.answer("Нельзя принять сделку в текущем статусе.")
+            return
+        await message.answer(f"Сделка #{deal_id} принята.")
+        await bot.send_message(int(deal["buyer_id"]), f"Сделка #{deal_id} принята продавцом.")
+        return
+
+    if action == "mark_delivered":
+        deal_id = parse_int(payload, "deal_id")
+        try:
+            deal = mark_delivered(deal_id, user_id)
+        except ValueError:
+            await message.answer("Нельзя отметить как выполнено в текущем статусе.")
+            return
+        await message.answer(f"Сделка #{deal_id} отмечена как выполненная.")
+        await bot.send_message(int(deal["buyer_id"]), f"Сделка #{deal_id} отмечена как выполненная.")
+        return
+
+    if action == "confirm_deal":
+        deal_id = parse_int(payload, "deal_id")
+        try:
+            deal = confirm_deal(deal_id, user_id)
+        except ValueError:
+            await message.answer("Нельзя подтвердить сделку в текущем статусе.")
+            return
+        await message.answer(f"Сделка #{deal_id} завершена.")
+        await bot.send_message(int(deal["seller_id"]), f"Сделка #{deal_id} завершена, средства зачислены.")
+        return
+
+    if action == "cancel_deal":
+        deal_id = parse_int(payload, "deal_id")
+        try:
+            deal = cancel_deal(deal_id, user_id)
+        except ValueError:
+            await message.answer("Нельзя отменить сделку в текущем статусе.")
+            return
+        other_user = int(deal["seller_id"]) if int(deal["buyer_id"]) == user_id else int(deal["buyer_id"])
+        await message.answer(f"Сделка #{deal_id} отменена.")
+        await bot.send_message(other_user, f"Сделка #{deal_id} была отменена.")
+        return
+
+    if action == "send_chat_message":
+        deal_id = parse_int(payload, "deal_id")
+        text = str(payload.get("text", "")).strip()
+        if not text:
+            await message.answer("Сообщение пустое.")
+            return
+        try:
+            create_chat_message(deal_id, user_id, text)
+        except ValueError:
+            await message.answer("Ошибка отправки сообщения.")
+            return
+        deal = get_deal(deal_id)
+        if deal:
+            other_user = int(deal["seller_id"]) if int(deal["buyer_id"]) == user_id else int(deal["buyer_id"])
+            await bot.send_message(other_user, f"Сообщение по сделке #{deal_id}: {text}")
+        await message.answer("Сообщение отправлено.")
+        return
+
+    if action == "list_chat_messages":
+        deal_id = parse_int(payload, "deal_id")
+        try:
+            rows = list_chat_messages(deal_id, user_id, limit=50)
+        except ValueError:
+            await message.answer("Ошибка загрузки чата.")
+            return
+        await message.answer("DATA_CHAT " + json.dumps({"deal_id": deal_id, "messages": [dict(r) for r in rows]}, ensure_ascii=False))
+        return
+
     if action == "topup_stars":
         amount = parse_int(payload, "amount")
         await send_stars_invoice(message, amount)
@@ -299,11 +421,15 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
     if action == "withdraw_create":
         amount = parse_int(payload, "amount")
         destination = str(payload.get("destination", "")).strip()
+        method = str(payload.get("method", "")).strip().lower()
+        if method not in ("card", "stars", "usdt_trc20"):
+            await message.answer("Выберите способ вывода: card, stars, usdt_trc20.")
+            return
         if amount <= 0 or not destination:
             await message.answer("Некорректные параметры вывода.")
             return
         try:
-            request_id = create_withdraw_request(user_id, amount, destination)
+            request_id = create_withdraw_request(user_id, amount, destination, method)
         except ValueError as exc:
             if str(exc) == "INSUFFICIENT_BALANCE":
                 await message.answer("Недостаточно средств для вывода.")
@@ -472,6 +598,7 @@ async def handle_admin_approve(message: Message) -> None:
 def create_dispatcher() -> Dispatcher:
     dp = Dispatcher()
     dp.message.register(handle_start, CommandStart())
+    dp.message.register(handle_bonus_code, F.text.casefold() == "нищий")
     dp.message.register(handle_balance, F.text == "/balance")
     dp.message.register(handle_deals, F.text == "/deals")
     dp.message.register(handle_admin_withdraws, F.text == "/admin_withdraws")

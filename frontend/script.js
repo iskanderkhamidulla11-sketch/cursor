@@ -1,5 +1,8 @@
-const tg = window.Telegram.WebApp;
+const tg = window.Telegram?.WebApp;
 const statusEl = document.getElementById("status");
+let currentDealId = 0;
+let activeFilter = "active";
+let pollTimer = null;
 
 if (tg) {
   tg.ready();
@@ -8,6 +11,14 @@ if (tg) {
 
 function setStatus(text) {
   statusEl.textContent = text;
+}
+
+function intValue(id) {
+  return Number.parseInt(document.getElementById(id).value, 10) || 0;
+}
+
+function strValue(id) {
+  return document.getElementById(id).value.trim();
 }
 
 function normalizeUsername(raw) {
@@ -20,94 +31,149 @@ function sendAction(payload) {
     return;
   }
   tg.sendData(JSON.stringify(payload));
-  setStatus("Отправлено. Проверьте ответ бота в чате.");
 }
 
-function intValue(id) {
-  return Number.parseInt(document.getElementById(id).value, 10) || 0;
+function showScreen(name) {
+  document.querySelectorAll(".screen").forEach((x) => x.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach((x) => x.classList.remove("active"));
+  document.getElementById(`screen-${name}`)?.classList.add("active");
+  document.querySelector(`.nav-btn[data-screen="${name}"]`)?.classList.add("active");
 }
 
-function strValue(id) {
-  return document.getElementById(id).value.trim();
+function renderDeals() {
+  const list = document.getElementById("dealsList");
+  const deals = JSON.parse(localStorage.getItem(`deals:${activeFilter}`) || "[]");
+  if (!deals.length) {
+    list.innerHTML = "<p>Сделок пока нет.</p>";
+    return;
+  }
+  list.innerHTML = deals
+    .map(
+      (d) => `<button type="button" class="deal-card" data-id="${d.id}">
+        <b>Сделка #${d.id}</b>
+        <span>${d.status}</span>
+        <span>${d.amount} RUB</span>
+      </button>`
+    )
+    .join("");
+  list.querySelectorAll(".deal-card").forEach((el) => {
+    el.addEventListener("click", () => openDeal(Number(el.dataset.id)));
+  });
 }
 
-function activateTab(tab) {
-  const targetPanel = document.getElementById(`panel-${tab}`);
-  if (!targetPanel) return;
-  document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
-  document.querySelectorAll(".panel").forEach((x) => x.classList.remove("active"));
-  document.querySelector(`.tab[data-tab="${tab}"]`)?.classList.add("active");
-  targetPanel.classList.add("active");
+function openDeal(dealId) {
+  currentDealId = dealId;
+  const key = `deal:${dealId}`;
+  const data = JSON.parse(localStorage.getItem(key) || "{}");
+  const box = document.getElementById("dealDetails");
+  box.innerHTML = `
+    <h3>Сделка #${dealId}</h3>
+    <p><b>Статус:</b> ${data.status || "-"}</p>
+    <p><b>Сумма:</b> ${data.amount || 0} RUB</p>
+    <div class="grid2">
+      <button type="button" id="acceptDealBtn">Принять</button>
+      <button type="button" id="deliverDealBtn">Выполнено</button>
+      <button type="button" id="confirmDealBtn">Подтвердить</button>
+      <button type="button" id="cancelDealBtn" class="secondary">Отменить</button>
+    </div>
+  `;
+  document.getElementById("acceptDealBtn").onclick = () => sendAction({ action: "accept_deal", deal_id: dealId });
+  document.getElementById("deliverDealBtn").onclick = () => sendAction({ action: "mark_delivered", deal_id: dealId });
+  document.getElementById("confirmDealBtn").onclick = () => sendAction({ action: "confirm_deal", deal_id: dealId });
+  document.getElementById("cancelDealBtn").onclick = () => sendAction({ action: "cancel_deal", deal_id: dealId });
+  showScreen("deal-view");
+  startChatPolling();
 }
 
-document.querySelectorAll(".tab").forEach((btn) => {
-  btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+function startChatPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => {
+    if (currentDealId > 0) sendAction({ action: "list_chat_messages", deal_id: currentDealId });
+  }, 2000);
+}
+
+function stopChatPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function renderChat(dealId) {
+  const list = document.getElementById("chatList");
+  const messages = JSON.parse(localStorage.getItem(`chat:${dealId}`) || "[]");
+  list.innerHTML = messages
+    .map((m) => `<div class="msg"><b>${m.username || m.sender_id}:</b> ${m.text}</div>`)
+    .join("");
+}
+
+document.querySelectorAll(".nav-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    stopChatPolling();
+    showScreen(btn.dataset.screen);
+  });
+});
+
+document.getElementById("goCreateDealBtn").onclick = () => document.getElementById("createDealModal").classList.remove("hidden");
+document.getElementById("openCreateDealBtn").onclick = () => document.getElementById("createDealModal").classList.remove("hidden");
+document.getElementById("closeCreateDealBtn").onclick = () => document.getElementById("createDealModal").classList.add("hidden");
+document.getElementById("goDealsBtn").onclick = () => showScreen("deals");
+document.getElementById("backToDealsBtn").onclick = () => {
+  stopChatPolling();
+  showScreen("deals");
+};
+
+document.querySelectorAll(".filter").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filter").forEach((x) => x.classList.remove("active"));
+    btn.classList.add("active");
+    activeFilter = btn.dataset.filter;
+    sendAction({ action: "list_deals", status_filter: activeFilter });
+    renderDeals();
+  });
 });
 
 document.getElementById("createDealBtn").addEventListener("click", () => {
   const username = normalizeUsername(strValue("dealUsername"));
   const amount = intValue("dealAmount");
   const description = strValue("dealDescription");
-  if (!/^[a-zA-Z0-9_]{5,32}$/.test(username)) {
-    setStatus("Некорректный username продавца.");
+  if (!/^[a-zA-Z0-9_]{5,32}$/.test(username) || amount <= 0) {
+    setStatus("Проверьте данные сделки.");
     return;
   }
-  if (amount <= 0) {
-    setStatus("Сумма должна быть больше 0.");
-    return;
-  }
+  sendAction({ action: "create_deal", target_username: username, amount, description });
+  document.getElementById("createDealModal").classList.add("hidden");
+});
+
+document.getElementById("topupStarsBtn").onclick = () => sendAction({ action: "topup_stars", amount: intValue("topupAmount") });
+document.getElementById("topupCryptoBtn").onclick = () => sendAction({ action: "topup_cryptobot", amount: intValue("topupAmount") });
+document.getElementById("checkCryptoBtn").onclick = () => sendAction({ action: "check_cryptobot_payment", invoice_id: strValue("cryptoInvoiceId") });
+
+document.getElementById("withdrawBtn").onclick = () => {
   sendAction({
-    action: "create_deal",
-    target_username: username,
-    amount,
-    description,
+    action: "withdraw_create",
+    amount: intValue("withdrawAmount"),
+    method: strValue("withdrawMethod"),
+    destination: strValue("withdrawDestination"),
   });
-});
+};
 
-document.getElementById("topupStarsBtn").addEventListener("click", () => {
-  const amount = intValue("topupAmount");
-  if (amount <= 0) {
-    setStatus("Сумма должна быть больше 0.");
-    return;
-  }
-  sendAction({ action: "topup_stars", amount });
-});
+document.getElementById("sendChatBtn").onclick = () => {
+  const text = strValue("chatMessageInput");
+  if (!text || !currentDealId) return;
+  sendAction({ action: "send_chat_message", deal_id: currentDealId, text });
+  document.getElementById("chatMessageInput").value = "";
+};
 
-document.getElementById("topupCryptoBtn").addEventListener("click", () => {
-  const amount = intValue("topupAmount");
-  if (amount <= 0) {
-    setStatus("Сумма должна быть больше 0.");
-    return;
-  }
-  sendAction({ action: "topup_cryptobot", amount });
-});
+if (tg) {
+  tg.onEvent("mainButtonClicked", () => {});
+}
 
-document.getElementById("checkCryptoBtn").addEventListener("click", () => {
-  const invoiceId = strValue("cryptoInvoiceId");
-  if (!invoiceId) {
-    setStatus("Введите invoice id.");
-    return;
-  }
-  sendAction({ action: "check_cryptobot_payment", invoice_id: invoiceId });
-});
+window.addEventListener("message", () => {});
 
-document.getElementById("sendReviewBtn").addEventListener("click", () => {
-  const dealId = intValue("reviewDealId");
-  const rating = intValue("reviewRating");
-  const text = strValue("reviewText");
-  if (dealId <= 0 || rating < 1 || rating > 5 || !text) {
-    setStatus("Некорректная форма отзыва.");
-    return;
-  }
-  sendAction({ action: "leave_review", deal_id: dealId, rating, text });
-});
+setInterval(() => {
+  sendAction({ action: "get_profile" });
+}, 5000);
 
-document.getElementById("withdrawBtn").addEventListener("click", () => {
-  const amount = intValue("withdrawAmount");
-  const destination = strValue("withdrawDestination");
-  if (amount <= 0 || !destination) {
-    setStatus("Некорректная форма вывода.");
-    return;
-  }
-  sendAction({ action: "withdraw_create", amount, destination });
-});
+// Users will get DATA_* messages in bot; this UI also stores last fetched structures manually if needed.
+showScreen("main");

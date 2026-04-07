@@ -185,6 +185,19 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS deal_chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                deal_id INTEGER NOT NULL,
+                sender_id INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (deal_id) REFERENCES deals(id),
+                FOREIGN KEY (sender_id) REFERENCES users(telegram_id)
+            )
+            """
+        )
         conn.commit()
 
 
@@ -320,6 +333,28 @@ def list_user_deals(user_id: int, limit: int = 10) -> list[sqlite3.Row]:
     return rows
 
 
+def list_user_deals_by_filter(user_id: int, status_filter: str, limit: int = 30) -> list[sqlite3.Row]:
+    sql = """
+        SELECT d.*, u1.username AS buyer_username, u2.username AS seller_username
+        FROM deals d
+        LEFT JOIN users u1 ON d.buyer_id = u1.telegram_id
+        LEFT JOIN users u2 ON d.seller_id = u2.telegram_id
+        WHERE (d.buyer_id = ? OR d.seller_id = ?)
+    """
+    params: list = [user_id, user_id]
+    if status_filter == "active":
+        sql += " AND d.status IN ('created','in_progress','delivered')"
+    elif status_filter == "completed":
+        sql += " AND d.status = 'completed'"
+    elif status_filter == "cancelled":
+        sql += " AND d.status = 'cancelled'"
+    sql += " ORDER BY d.id DESC LIMIT ?"
+    params.append(limit)
+    with get_connection() as conn:
+        rows = conn.execute(sql, tuple(params)).fetchall()
+    return rows
+
+
 def update_deal_status(deal_id: int, status: str) -> None:
     field_by_status = {
         DEAL_STATUS_ACCEPTED: "accepted_at",
@@ -390,7 +425,7 @@ def confirm_deal(deal_id: int, buyer_id: int) -> sqlite3.Row:
         conn.execute(
             """
             INSERT INTO wallet_transactions (user_id, deal_id, tx_type, amount, currency, status, meta_json)
-            VALUES (?, ?, ?, ?, 'USDT', 'done', ?)
+            VALUES (?, ?, ?, ?, 'RUB', 'done', ?)
             """,
             (
                 int(deal["seller_id"]),
@@ -399,6 +434,31 @@ def confirm_deal(deal_id: int, buyer_id: int) -> sqlite3.Row:
                 amount,
                 json.dumps({"reason": "deal_release"}),
             ),
+        )
+        conn.commit()
+    return get_deal(deal_id)  # type: ignore[return-value]
+
+
+def cancel_deal(deal_id: int, actor_id: int) -> sqlite3.Row:
+    with get_connection() as conn:
+        deal = conn.execute("SELECT * FROM deals WHERE id = ?", (deal_id,)).fetchone()
+        if not deal:
+            raise ValueError("DEAL_NOT_FOUND")
+        if actor_id not in (int(deal["buyer_id"]), int(deal["seller_id"])):
+            raise ValueError("FORBIDDEN")
+        if deal["status"] not in (DEAL_STATUS_CREATED, DEAL_STATUS_IN_PROGRESS):
+            raise ValueError("INVALID_STATUS")
+        conn.execute(
+            "UPDATE deals SET status = ?, cancelled_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (DEAL_STATUS_CANCELLED, deal_id),
+        )
+        # Refund buyer if hold happened.
+        conn.execute(
+            """
+            INSERT INTO wallet_transactions (user_id, deal_id, tx_type, amount, currency, status, meta_json)
+            VALUES (?, ?, ?, ?, 'RUB', 'done', ?)
+            """,
+            (int(deal["buyer_id"]), deal_id, TX_REFUND, int(deal["amount"]), json.dumps({"reason": "deal_cancel"})),
         )
         conn.commit()
     return get_deal(deal_id)  # type: ignore[return-value]
@@ -430,7 +490,7 @@ def create_review(
         conn.commit()
 
 
-def create_withdraw_request(user_id: int, amount: int, destination: str) -> int:
+def create_withdraw_request(user_id: int, amount: int, destination: str, method: str) -> int:
     with get_connection() as conn:
         if wallet_balance(user_id) < amount:
             raise ValueError("INSUFFICIENT_BALANCE")
@@ -444,9 +504,9 @@ def create_withdraw_request(user_id: int, amount: int, destination: str) -> int:
         cursor = conn.execute(
             """
             INSERT INTO withdraw_requests (user_id, amount, method, destination, status)
-            VALUES (?, ?, 'cryptobot', ?, 'pending')
+            VALUES (?, ?, ?, ?, 'pending')
             """,
-            (user_id, amount, destination),
+            (user_id, amount, method, destination),
         )
         conn.commit()
         return int(cursor.lastrowid)
@@ -552,3 +612,59 @@ def list_wallet_transactions(user_id: int, limit: int = 15) -> list[sqlite3.Row]
             (user_id, limit),
         ).fetchall()
     return rows
+
+
+def create_chat_message(deal_id: int, sender_id: int, text: str) -> int:
+    with get_connection() as conn:
+        deal = conn.execute("SELECT * FROM deals WHERE id = ?", (deal_id,)).fetchone()
+        if not deal:
+            raise ValueError("DEAL_NOT_FOUND")
+        if sender_id not in (int(deal["buyer_id"]), int(deal["seller_id"])):
+            raise ValueError("FORBIDDEN")
+        cursor = conn.execute(
+            "INSERT INTO deal_chat_messages (deal_id, sender_id, text) VALUES (?, ?, ?)",
+            (deal_id, sender_id, text.strip()),
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def list_chat_messages(deal_id: int, user_id: int, limit: int = 50) -> list[sqlite3.Row]:
+    with get_connection() as conn:
+        deal = conn.execute("SELECT * FROM deals WHERE id = ?", (deal_id,)).fetchone()
+        if not deal:
+            raise ValueError("DEAL_NOT_FOUND")
+        if user_id not in (int(deal["buyer_id"]), int(deal["seller_id"])):
+            raise ValueError("FORBIDDEN")
+        rows = conn.execute(
+            """
+            SELECT m.*, u.username
+            FROM deal_chat_messages m
+            LEFT JOIN users u ON m.sender_id = u.telegram_id
+            WHERE m.deal_id = ?
+            ORDER BY m.id DESC
+            LIMIT ?
+            """,
+            (deal_id, limit),
+        ).fetchall()
+    return list(reversed(rows))
+
+
+def get_profile_stats(user_id: int) -> dict:
+    with get_connection() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id = ?", (user_id,)).fetchone()
+        deals_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM deals WHERE buyer_id = ? OR seller_id = ?",
+            (user_id, user_id),
+        ).fetchone()["c"]
+        reviews = conn.execute(
+            "SELECT rating, text, author_id, created_at FROM reviews WHERE target_id = ? ORDER BY id DESC LIMIT 20",
+            (user_id,),
+        ).fetchall()
+    return {
+        "balance": wallet_balance(user_id),
+        "rating_count": int(user["rating_count"] if user else 0),
+        "rating_avg": round((int(user["rating_sum"]) / int(user["rating_count"])) if user and int(user["rating_count"]) else 0, 2),
+        "deals_count": int(deals_count),
+        "reviews": [dict(r) for r in reviews],
+    }
