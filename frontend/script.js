@@ -2,7 +2,8 @@ const tg = window.Telegram?.WebApp;
 const statusEl = document.getElementById("status");
 let currentDealId = 0;
 let activeFilter = "active";
-let pollTimer = null;
+// Last sent payload dedupe (prevent accidental repeated sends)
+let __lastSent = { payload: null, ts: 0 };
 
 if (tg) {
   tg.ready();
@@ -30,7 +31,19 @@ function sendAction(payload) {
     setStatus("Откройте Mini App внутри Telegram.");
     return;
   }
-  tg.sendData(JSON.stringify(payload));
+  try {
+    const payloadStr = JSON.stringify(payload);
+    const now = Date.now();
+    if (__lastSent.payload === payloadStr && now - __lastSent.ts < 3000) {
+      // ignore duplicate within 3s
+      return;
+    }
+    tg.sendData(payloadStr);
+    __lastSent.payload = payloadStr;
+    __lastSent.ts = now;
+  } catch (e) {
+    console.error("sendAction error", e);
+  }
 }
 
 function showScreen(name) {
@@ -82,21 +95,6 @@ function openDeal(dealId) {
   document.getElementById("confirmDealBtn").onclick = () => sendAction({ action: "confirm_deal", deal_id: dealId });
   document.getElementById("cancelDealBtn").onclick = () => sendAction({ action: "cancel_deal", deal_id: dealId });
   showScreen("deal-view");
-  startChatPolling();
-}
-
-function startChatPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(() => {
-    if (currentDealId > 0) sendAction({ action: "list_chat_messages", deal_id: currentDealId });
-  }, 2000);
-}
-
-function stopChatPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
 }
 
 function renderChat(dealId) {
@@ -109,7 +107,6 @@ function renderChat(dealId) {
 
 document.querySelectorAll(".nav-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    stopChatPolling();
     showScreen(btn.dataset.screen);
   });
 });
@@ -119,7 +116,6 @@ document.getElementById("openCreateDealBtn").onclick = () => document.getElement
 document.getElementById("closeCreateDealBtn").onclick = () => document.getElementById("createDealModal").classList.add("hidden");
 document.getElementById("goDealsBtn").onclick = () => showScreen("deals");
 document.getElementById("backToDealsBtn").onclick = () => {
-  stopChatPolling();
   showScreen("deals");
 };
 
@@ -165,15 +161,7 @@ document.getElementById("sendChatBtn").onclick = () => {
   document.getElementById("chatMessageInput").value = "";
 };
 
-if (tg) {
-  tg.onEvent("mainButtonClicked", () => {});
-}
-
-window.addEventListener("message", () => {});
-
-setInterval(() => {
-  sendAction({ action: "get_profile" });
-}, 5000);
+// No automatic message handlers — actions must be initiated by user interactions.
 
 // Users will get DATA_* messages in bot; this UI also stores last fetched structures manually if needed.
 showScreen("main");

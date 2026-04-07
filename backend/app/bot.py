@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Any, Optional
 
 import aiohttp
@@ -52,7 +53,7 @@ def build_main_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [
                 KeyboardButton(
-                    text="Открыть Mini App",
+                    text="Открыть FunPay",
                     web_app=WebAppInfo(url=settings.webapp_url),
                 )
             ]
@@ -265,34 +266,15 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
         return
 
     if action == "list_deals":
-        status_filter = str(payload.get("status_filter", "all"))
-        rows = list_user_deals_by_filter(user_id, status_filter, limit=50)
-        await message.answer(
-            "DATA_DEALS " + json.dumps(
-                {
-                    "status_filter": status_filter,
-                    "deals": [dict(r) for r in rows],
-                },
-                ensure_ascii=False,
-            )
-        )
+        # Do not send periodic DATA_* messages to chat; they may close Mini App.
         return
 
     if action == "get_profile":
-        stats = get_profile_stats(user_id)
-        await message.answer("DATA_PROFILE " + json.dumps(stats, ensure_ascii=False))
+        # Reserved for future API transport without chat spam.
         return
 
     if action == "get_deal":
-        deal_id = parse_int(payload, "deal_id")
-        deal = get_deal(deal_id)
-        if not deal:
-            await message.answer("Сделка не найдена.")
-            return
-        if user_id not in (int(deal["buyer_id"]), int(deal["seller_id"])):
-            await message.answer("Нет доступа.")
-            return
-        await message.answer("DATA_DEAL " + json.dumps(dict(deal), ensure_ascii=False))
+        # Reserved for future API transport without chat spam.
         return
 
     if action == "accept_deal":
@@ -359,13 +341,7 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
         return
 
     if action == "list_chat_messages":
-        deal_id = parse_int(payload, "deal_id")
-        try:
-            rows = list_chat_messages(deal_id, user_id, limit=50)
-        except ValueError:
-            await message.answer("Ошибка загрузки чата.")
-            return
-        await message.answer("DATA_CHAT " + json.dumps({"deal_id": deal_id, "messages": [dict(r) for r in rows]}, ensure_ascii=False))
+        # Reserved for future API transport without chat spam.
         return
 
     if action == "topup_stars":
@@ -476,6 +452,22 @@ async def handle_webapp_data(message: Message, bot: Bot) -> None:
     if message.from_user is None or message.web_app_data is None:
         return
 
+    # Simple deduplication: ignore identical payloads from same user within 3 seconds
+    # This prevents rapid repeated processing when the Mini App (or client) resends data.
+    if not hasattr(handle_webapp_data, "_recent"):
+        handle_webapp_data._recent = {}
+    payload_raw = message.web_app_data.data
+    try:
+        now = time.time()
+        key = (message.from_user.id, payload_raw)
+        last = handle_webapp_data._recent.get(key)
+        if last and now - last < 3.0:
+            return
+        handle_webapp_data._recent[key] = now
+    except Exception:
+        # If anything goes wrong with dedupe, continue normally.
+        payload_raw = message.web_app_data.data
+
     upsert_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
@@ -557,7 +549,13 @@ async def handle_deal_callback(callback: CallbackQuery, bot: Bot) -> None:
             await callback.answer("Неизвестное действие", show_alert=True)
             return
     except ValueError as exc:
-        await callback.answer(str(exc), show_alert=True)
+        code = str(exc)
+        friendly = {
+            "DEAL_NOT_FOUND": "Сделка не найдена.",
+            "FORBIDDEN": "У вас нет прав на это действие.",
+            "INVALID_STATUS": "Нельзя выполнить действие в текущем статусе сделки.",
+        }.get(code, code)
+        await callback.answer(friendly, show_alert=True)
 
 
 async def handle_admin_withdraws(message: Message) -> None:
