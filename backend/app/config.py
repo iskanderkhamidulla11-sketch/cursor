@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import os
 from pathlib import Path
 
@@ -39,3 +40,15 @@ class Settings:
 
 
 settings = Settings()
+=======
+import os
+
+
+class Settings:
+    bot_token: str = os.getenv("BOT_TOKEN", "")
+    webapp_url: str = os.getenv("WEBAPP_URL", "")
+    api_base_url: str = os.getenv("API_BASE_URL", "")
+
+
+settings = Settings()
+>>>>>>> 812b10437b3ace4a467d917045a8e96128a6b6a4

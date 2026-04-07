@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!doctype html>
 <html lang="en">
 <head>
@@ -71,3 +72,32 @@
   <script src="./script.js"></script>
 </body>
 </html>
+=======
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deal Mini App</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Create Deal</h1>
+      <p class="hint">
+        Enter Telegram username. If this user started the bot, invitation will be
+        sent.
+      </p>
+
+      <label for="username">Target username</label>
+      <input id="username" type="text" placeholder="@username" maxlength="64" />
+
+      <button id="createDealBtn" type="button">Send invitation</button>
+      <p id="status" class="status"></p>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
+>>>>>>> 812b10437b3ace4a467d917045a8e96128a6b6a4
