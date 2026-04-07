@@ -47,13 +47,17 @@ function sendAction(payload) {
   }
 }
 
-async function fetchAPI(endpoint) {
+async function fetchAPI(endpoint, params = {}) {
   try {
-    const response = await fetch(`http://localhost:8080${endpoint}`);
-    if (!response.ok) throw new Error('API error');
+    const url = new URL(`http://localhost:8080${endpoint}`);
+    url.searchParams.set('user_id', userId);
+    Object.keys(params).forEach(key => url.searchParams.set(key, params[key]));
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
   } catch (e) {
-    console.error('fetchAPI error', e);
+    console.error('API fetch error', e);
+    setStatus('Ошибка загрузки данных');
     return null;
   }
 }
@@ -65,34 +69,28 @@ function showScreen(name) {
   document.querySelector(`.nav-btn[data-screen="${name}"]`)?.classList.add("active");
 }
 
-async function renderDeals() {
-  const list = document.getElementById("dealsList");
-  const deals = await fetchAPI(`/api/deals?user_id=${userId}&status_filter=${activeFilter}`);
-  if (!deals || deals.error) {
-    list.innerHTML = "<p>Ошибка загрузки сделок.</p>";
+async function renderProfile() {
+  const profile = await fetchAPI('/api/profile');
+  if (!profile || profile.error) {
+    document.getElementById("profileBalance").textContent = "Ошибка";
+    document.getElementById("profileRating").textContent = "0";
+    document.getElementById("profileDeals").textContent = "0";
     return;
   }
-  if (!deals.length) {
-    list.innerHTML = "<p>Сделок пока нет.</p>";
-    return;
+  document.getElementById("profileBalance").textContent = `${profile.balance} RUB`;
+  document.getElementById("profileRating").textContent = profile.rating_avg.toFixed(1);
+  document.getElementById("profileDeals").textContent = profile.deals_count;
+  const reviewsEl = document.getElementById("profileReviews");
+  if (profile.reviews && profile.reviews.length) {
+    reviewsEl.innerHTML = profile.reviews.map(r => `<p><b>${r.rating}/5:</b> ${r.text}</p>`).join('');
+  } else {
+    reviewsEl.innerHTML = '<p>Отзывов нет.</p>';
   }
-  list.innerHTML = deals
-    .map(
-      (d) => `<button type="button" class="deal-card" data-id="${d.id}">
-        <b>Сделка #${d.id}</b>
-        <span>${d.status}</span>
-        <span>${d.amount} RUB</span>
-      </button>`
-    )
-    .join("");
-  list.querySelectorAll(".deal-card").forEach((el) => {
-    el.addEventListener("click", () => openDeal(Number(el.dataset.id)));
-  });
 }
 
 async function openDeal(dealId) {
   currentDealId = dealId;
-  const deal = await fetchAPI(`/api/deal/${dealId}?user_id=${userId}`);
+  const deal = await fetchAPI(`/api/deal/${dealId}`);
   if (!deal || deal.error) {
     setStatus("Ошибка загрузки сделки.");
     return;
@@ -137,14 +135,41 @@ async function openDeal(dealId) {
   await renderChat(dealId);
 }
 
-async async function loadProfile() {
-  const profile = await fetchAPI(`/api/profile?user_id=${userId}`);
-  if (!profile || profile.error) return;
-  document.getElementById("profileBalance").textContent = `${profile.balance} RUB`;
-  document.getElementById("profileRating").textContent = profile.rating_avg.toFixed(1);
-  document.getElementById("profileDeals").textContent = profile.deals_count;
-  const reviewsEl = document.getElementById("profileReviews");
-  reviewsEl.innerHTML = profile.reviews.map(r => `<p>${r.rating}/5: ${r.text}</p>`).join("");
+async function renderChat(dealId) {
+  const list = document.getElementById("chatList");
+  const messages = await fetchAPI(`/api/chat/${dealId}`);
+  if (!messages || messages.error) {
+    list.innerHTML = "<p>Ошибка загрузки чата.</p>";
+    return;
+  }
+  list.innerHTML = messages
+    .map((m) => `<div class="msg"><b>${m.username || m.sender_id}:</b> ${m.text}</div>`)
+    .join("");
+}
+
+async function renderDeals() {
+  const list = document.getElementById("dealsList");
+  const deals = await fetchAPI('/api/deals', { status_filter: activeFilter });
+  if (!deals || deals.error) {
+    list.innerHTML = "<p>Ошибка загрузки сделок.</p>";
+    return;
+  }
+  if (!deals.length) {
+    list.innerHTML = "<p>Сделок пока нет.</p>";
+    return;
+  }
+  list.innerHTML = deals
+    .map(
+      (d) => `<button type="button" class="deal-card" data-id="${d.id}">
+        <b>Сделка #${d.id}</b>
+        <span>${d.status}</span>
+        <span>${d.amount} RUB</span>
+      </button>`
+    )
+    .join("");
+  list.querySelectorAll(".deal-card").forEach((el) => {
+    el.addEventListener("click", () => openDeal(Number(el.dataset.id)));
+  });
 }
 
 document.querySelectorAll(".nav-btn").forEach((btn) => {
