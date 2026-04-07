@@ -1,9 +1,10 @@
-<<<<<<< HEAD
 const tg = window.Telegram.WebApp;
 const statusEl = document.getElementById("status");
 
-tg.ready();
-tg.expand();
+if (tg) {
+  tg.ready();
+  tg.expand();
+}
 
 function setStatus(text) {
   statusEl.textContent = text;
@@ -14,8 +15,12 @@ function normalizeUsername(raw) {
 }
 
 function sendAction(payload) {
+  if (!tg) {
+    setStatus("Откройте Mini App внутри Telegram.");
+    return;
+  }
   tg.sendData(JSON.stringify(payload));
-  setStatus("Sent. Check bot chat for response.");
+  setStatus("Отправлено. Проверьте ответ бота в чате.");
 }
 
 function intValue(id) {
@@ -26,14 +31,17 @@ function strValue(id) {
   return document.getElementById(id).value.trim();
 }
 
+function activateTab(tab) {
+  const targetPanel = document.getElementById(`panel-${tab}`);
+  if (!targetPanel) return;
+  document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach((x) => x.classList.remove("active"));
+  document.querySelector(`.tab[data-tab="${tab}"]`)?.classList.add("active");
+  targetPanel.classList.add("active");
+}
+
 document.querySelectorAll(".tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const tab = btn.dataset.tab;
-    document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
-    document.querySelectorAll(".panel").forEach((x) => x.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById(`panel-${tab}`).classList.add("active");
-  });
+  btn.addEventListener("click", () => activateTab(btn.dataset.tab));
 });
 
 document.getElementById("createDealBtn").addEventListener("click", () => {
@@ -41,11 +49,11 @@ document.getElementById("createDealBtn").addEventListener("click", () => {
   const amount = intValue("dealAmount");
   const description = strValue("dealDescription");
   if (!/^[a-zA-Z0-9_]{5,32}$/.test(username)) {
-    setStatus("Invalid seller username.");
+    setStatus("Некорректный username продавца.");
     return;
   }
   if (amount <= 0) {
-    setStatus("Amount must be > 0.");
+    setStatus("Сумма должна быть больше 0.");
     return;
   }
   sendAction({
@@ -59,7 +67,7 @@ document.getElementById("createDealBtn").addEventListener("click", () => {
 document.getElementById("topupStarsBtn").addEventListener("click", () => {
   const amount = intValue("topupAmount");
   if (amount <= 0) {
-    setStatus("Amount must be > 0.");
+    setStatus("Сумма должна быть больше 0.");
     return;
   }
   sendAction({ action: "topup_stars", amount });
@@ -68,7 +76,7 @@ document.getElementById("topupStarsBtn").addEventListener("click", () => {
 document.getElementById("topupCryptoBtn").addEventListener("click", () => {
   const amount = intValue("topupAmount");
   if (amount <= 0) {
-    setStatus("Amount must be > 0.");
+    setStatus("Сумма должна быть больше 0.");
     return;
   }
   sendAction({ action: "topup_cryptobot", amount });
@@ -77,7 +85,7 @@ document.getElementById("topupCryptoBtn").addEventListener("click", () => {
 document.getElementById("checkCryptoBtn").addEventListener("click", () => {
   const invoiceId = strValue("cryptoInvoiceId");
   if (!invoiceId) {
-    setStatus("Enter invoice id.");
+    setStatus("Введите invoice id.");
     return;
   }
   sendAction({ action: "check_cryptobot_payment", invoice_id: invoiceId });
@@ -88,7 +96,7 @@ document.getElementById("sendReviewBtn").addEventListener("click", () => {
   const rating = intValue("reviewRating");
   const text = strValue("reviewText");
   if (dealId <= 0 || rating < 1 || rating > 5 || !text) {
-    setStatus("Review form is invalid.");
+    setStatus("Некорректная форма отзыва.");
     return;
   }
   sendAction({ action: "leave_review", deal_id: dealId, rating, text });
@@ -98,55 +106,8 @@ document.getElementById("withdrawBtn").addEventListener("click", () => {
   const amount = intValue("withdrawAmount");
   const destination = strValue("withdrawDestination");
   if (amount <= 0 || !destination) {
-    setStatus("Withdraw form is invalid.");
+    setStatus("Некорректная форма вывода.");
     return;
   }
   sendAction({ action: "withdraw_create", amount, destination });
 });
-=======
-const tg = window.Telegram.WebApp;
-const usernameInput = document.getElementById("username");
-const createDealBtn = document.getElementById("createDealBtn");
-const statusEl = document.getElementById("status");
-
-tg.ready();
-tg.expand();
-
-function setStatus(text) {
-  statusEl.textContent = text;
-}
-
-function normalizeUsername(raw) {
-  return raw.trim().replace(/^@+/, "");
-}
-
-function isValidUsername(username) {
-  return /^[a-zA-Z0-9_]{5,32}$/.test(username);
-}
-
-createDealBtn.addEventListener("click", () => {
-  const targetUsername = normalizeUsername(usernameInput.value);
-  if (!targetUsername) {
-    setStatus("Enter username.");
-    return;
-  }
-
-  if (!isValidUsername(targetUsername)) {
-    setStatus("Invalid username format.");
-    return;
-  }
-
-  const payload = {
-    action: "create_deal",
-    target_username: targetUsername,
-  };
-
-  createDealBtn.disabled = true;
-  setStatus("Sending...");
-  tg.sendData(JSON.stringify(payload));
-  setStatus("Request sent to bot. Check chat.");
-  setTimeout(() => {
-    tg.close();
-  }, 400);
-});
->>>>>>> 812b10437b3ace4a467d917045a8e96128a6b6a4

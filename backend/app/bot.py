@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import json
 from typing import Any, Optional
 
@@ -40,7 +39,7 @@ from app.db import (
 )
 
 STARS_PAYLOAD_PREFIX = "stars_topup:"
-CURRENCY = "USDT"
+CURRENCY = "RUB"
 
 
 def build_main_keyboard() -> ReplyKeyboardMarkup:
@@ -61,7 +60,7 @@ def deal_actions_keyboard(deal_id: int, role: str, status: str) -> Optional[Inli
     buttons: list[list[InlineKeyboardButton]] = []
     if role == "seller" and status == "created":
         buttons.append(
-            [InlineKeyboardButton(text="Accept deal", callback_data=f"deal:accept:{deal_id}")]
+            [InlineKeyboardButton(text="Принять сделку", callback_data=f"deal:accept:{deal_id}")]
         )
     if role == "seller" and status == "in_progress":
         buttons.append(
@@ -106,7 +105,7 @@ async def handle_start(message: Message) -> None:
         set_admin_role(message.from_user.id)
 
     await message.answer(
-        "Connected.\nUse Mini App for deals, wallet, reviews and withdrawals.",
+        "Вы подключены.\nИспользуйте Mini App для сделок, баланса, отзывов и вывода.",
         reply_markup=build_main_keyboard(),
     )
 
@@ -116,9 +115,9 @@ async def handle_balance(message: Message) -> None:
         return
     balance = wallet_balance(message.from_user.id)
     tx = list_wallet_transactions(message.from_user.id, limit=8)
-    lines = [f"Balance: {balance} {CURRENCY}", "", "Recent operations:"]
+    lines = [f"Баланс: {balance} {CURRENCY}", "", "Последние операции:"]
     if not tx:
-        lines.append("- empty")
+        lines.append("- пусто")
     for row in tx:
         lines.append(f"- {row['tx_type']}: {row['amount']} {row['currency']}")
     await message.answer("\n".join(lines))
@@ -129,24 +128,24 @@ async def handle_deals(message: Message) -> None:
         return
     deals = list_user_deals(message.from_user.id, limit=10)
     if not deals:
-        await message.answer("Deals list is empty.")
+        await message.answer("Список сделок пуст.")
         return
-    lines = ["Your deals:"]
+    lines = ["Ваши сделки:"]
     for row in deals:
         role = "buyer" if int(row["buyer_id"]) == message.from_user.id else "seller"
         counterpart = row["seller_id"] if role == "buyer" else row["buyer_id"]
         lines.append(
-            f"- #{row['id']} {row['status']} | role: {role} | amount: {row['amount']} {CURRENCY} | with: {counterpart}"
+            f"- #{row['id']} {row['status']} | роль: {role} | сумма: {row['amount']} {CURRENCY} | c: {counterpart}"
         )
     await message.answer("\n".join(lines))
 
 
 async def send_stars_invoice(message: Message, amount: int) -> None:
     if amount <= 0:
-        await message.answer("Top up amount must be > 0")
+        await message.answer("Сумма пополнения должна быть больше 0.")
         return
     if not settings.stars_provider_token:
-        await message.answer("Stars provider token is not configured.")
+        await message.answer("Токен Telegram Stars не настроен.")
         return
     payload = f"{STARS_PAYLOAD_PREFIX}{message.from_user.id}:{amount}"
     create_payment_intent(
@@ -158,12 +157,12 @@ async def send_stars_invoice(message: Message, amount: int) -> None:
         payload={"kind": "stars_topup"},
     )
     await message.answer_invoice(
-        title="Balance top up",
-        description=f"Top up wallet by {amount} {CURRENCY}",
+        title="Пополнение баланса",
+        description=f"Пополнение кошелька на {amount} {CURRENCY}",
         payload=payload,
         provider_token=settings.stars_provider_token,
         currency="XTR",
-        prices=[LabeledPrice(label="Top up", amount=amount)],
+        prices=[LabeledPrice(label="Пополнение", amount=amount)],
     )
 
 
@@ -175,8 +174,8 @@ async def create_cryptobot_invoice(user_id: int, amount: int) -> tuple[Optional[
     payload = {
         "asset": "USDT",
         "amount": str(amount),
-        "description": f"Top up for user {user_id}",
-        "hidden_message": "Balance will be updated after payment.",
+        "description": f"Пополнение для пользователя {user_id}",
+        "hidden_message": "Баланс будет обновлен после оплаты.",
     }
     async with aiohttp.ClientSession() as session:
         async with session.post(url, headers=headers, json=payload, timeout=25) as resp:
@@ -210,16 +209,16 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
         amount = parse_int(payload, "amount")
         description = str(payload.get("description", "")).strip()
         if not target_username or amount <= 0:
-            await message.answer("Invalid deal params.")
+            await message.answer("Некорректные параметры сделки.")
             return
         target_user = get_user_by_username(target_username)
         if not target_user:
             await message.answer(
-                f"@{target_username} not found in bot. Ask user to run /start."
+                f"@{target_username} не найден в боте. Попросите пользователя выполнить /start."
             )
             return
         if target_user.telegram_id == user_id:
-            await message.answer("You cannot create a deal with yourself.")
+            await message.answer("Нельзя создать сделку с самим собой.")
             return
         try:
             deal_id = create_deal(
@@ -230,21 +229,21 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
             )
         except ValueError as exc:
             if str(exc) == "INSUFFICIENT_BALANCE":
-                await message.answer("Insufficient balance. Top up wallet first.")
+                await message.answer("Недостаточно средств. Сначала пополните баланс.")
                 return
             raise
         keyboard = deal_actions_keyboard(deal_id, role="seller", status="created")
         await bot.send_message(
             chat_id=target_user.telegram_id,
             text=(
-                "New escrow deal request\n"
-                f"Deal #{deal_id}\n"
-                f"Amount: {amount} {CURRENCY}\n"
-                f"Description: {description or '-'}"
+                "Новая эскроу-сделка\n"
+                f"Сделка #{deal_id}\n"
+                f"Сумма: {amount} {CURRENCY}\n"
+                f"Описание: {description or '-'}"
             ),
             reply_markup=keyboard,
         )
-        await message.answer(f"Deal #{deal_id} sent to @{target_username}.")
+        await message.answer(f"Сделка #{deal_id} отправлена пользователю @{target_username}.")
         return
 
     if action == "topup_stars":
@@ -255,11 +254,11 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
     if action == "topup_cryptobot":
         amount = parse_int(payload, "amount")
         if amount <= 0:
-            await message.answer("Invalid amount.")
+            await message.answer("Некорректная сумма.")
             return
         invoice_id, pay_url = await create_cryptobot_invoice(user_id, amount)
         if not invoice_id or not pay_url:
-            await message.answer("CryptoBot is unavailable. Try later.")
+            await message.answer("CryptoBot временно недоступен. Попробуйте позже.")
             return
         create_payment_intent(
             user_id=user_id,
@@ -270,22 +269,22 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
             payload={"pay_url": pay_url},
         )
         await message.answer(
-            f"CryptoBot invoice created.\nPay URL:\n{pay_url}\n\nAfter payment tap 'Check CryptoBot payment' in Mini App."
+            f"Счет CryptoBot создан.\nСсылка на оплату:\n{pay_url}\n\nПосле оплаты нажмите 'Проверить оплату CryptoBot' в Mini App."
         )
         return
 
     if action == "check_cryptobot_payment":
         invoice_id = str(payload.get("invoice_id", "")).strip()
         if not invoice_id:
-            await message.answer("invoice_id is required.")
+            await message.answer("Нужно указать invoice_id.")
             return
         is_paid = await check_cryptobot_invoice(invoice_id)
         if not is_paid:
-            await message.answer("Payment not found yet.")
+            await message.answer("Оплата пока не найдена.")
             return
         intent = mark_payment_intent_paid("cryptobot", invoice_id)
         if not intent:
-            await message.answer("Payment intent not found.")
+            await message.answer("Платеж не найден.")
             return
         add_wallet_transaction(
             user_id=int(intent["user_id"]),
@@ -294,24 +293,24 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
             currency=CURRENCY,
             meta={"provider": "cryptobot", "invoice_id": invoice_id},
         )
-        await message.answer(f"Top up completed: +{int(intent['amount'])} {CURRENCY}")
+        await message.answer(f"Пополнение выполнено: +{int(intent['amount'])} {CURRENCY}")
         return
 
     if action == "withdraw_create":
         amount = parse_int(payload, "amount")
         destination = str(payload.get("destination", "")).strip()
         if amount <= 0 or not destination:
-            await message.answer("Invalid withdraw params.")
+            await message.answer("Некорректные параметры вывода.")
             return
         try:
             request_id = create_withdraw_request(user_id, amount, destination)
         except ValueError as exc:
             if str(exc) == "INSUFFICIENT_BALANCE":
-                await message.answer("Insufficient balance for withdrawal.")
+                await message.answer("Недостаточно средств для вывода.")
                 return
             raise
         await message.answer(
-            f"Withdraw request #{request_id} created.\nStatus: accepted by administration."
+            f"Заявка на вывод #{request_id} создана.\nСтатус: принята администрацией."
         )
         return
 
@@ -321,30 +320,30 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
         text = str(payload.get("text", "")).strip()
         deal = get_deal(deal_id)
         if not deal:
-            await message.answer("Deal not found.")
+            await message.answer("Сделка не найдена.")
             return
         if deal["status"] != "completed":
-            await message.answer("Review allowed only for completed deal.")
+            await message.answer("Отзыв можно оставить только по завершенной сделке.")
             return
         if rating < 1 or rating > 5 or not text:
-            await message.answer("Review must include rating 1..5 and text.")
+            await message.answer("Отзыв должен содержать оценку 1..5 и текст.")
             return
         if user_id == int(deal["buyer_id"]):
             target = int(deal["seller_id"])
         elif user_id == int(deal["seller_id"]):
             target = int(deal["buyer_id"])
         else:
-            await message.answer("Forbidden.")
+            await message.answer("Нет доступа.")
             return
         try:
             create_review(deal_id, user_id, target, rating, text)
         except Exception:
-            await message.answer("Review already submitted for this deal.")
+            await message.answer("Отзыв по этой сделке уже отправлен.")
             return
-        await message.answer("Review sent.")
+        await message.answer("Отзыв отправлен.")
         return
 
-    await message.answer("Unknown action.")
+    await message.answer("Неизвестное действие.")
 
 
 async def handle_webapp_data(message: Message, bot: Bot) -> None:
@@ -361,7 +360,7 @@ async def handle_webapp_data(message: Message, bot: Bot) -> None:
     try:
         payload: dict[str, Any] = json.loads(payload_raw)
     except json.JSONDecodeError:
-        await message.answer("Invalid data from Mini App.")
+        await message.answer("Некорректные данные из Mini App.")
         return
     await process_webapp_action(message, payload, bot)
 
@@ -386,7 +385,7 @@ async def handle_successful_payment(message: Message) -> None:
         currency=CURRENCY,
         meta={"provider": "stars", "payload": payload},
     )
-    await message.answer(f"Top up completed: +{int(intent['amount'])} {CURRENCY}")
+    await message.answer(f"Пополнение выполнено: +{int(intent['amount'])} {CURRENCY}")
 
 
 async def handle_deal_callback(callback: CallbackQuery, bot: Bot) -> None:
@@ -394,42 +393,42 @@ async def handle_deal_callback(callback: CallbackQuery, bot: Bot) -> None:
         return
     parts = callback.data.split(":")
     if len(parts) != 3:
-        await callback.answer("Bad action", show_alert=True)
+        await callback.answer("Некорректное действие", show_alert=True)
         return
     _, action, deal_raw = parts
     if not deal_raw.isdigit():
-        await callback.answer("Bad deal id", show_alert=True)
+        await callback.answer("Некорректный ID сделки", show_alert=True)
         return
     deal_id = int(deal_raw)
     try:
         if action == "accept":
             deal = accept_deal(deal_id, callback.from_user.id)
-            await callback.answer("Deal accepted")
+            await callback.answer("Сделка принята")
             await bot.send_message(
                 int(deal["buyer_id"]),
-                f"Deal #{deal_id} accepted by seller.",
+                f"Сделка #{deal_id} принята продавцом.",
             )
         elif action == "delivered":
             deal = mark_delivered(deal_id, callback.from_user.id)
-            await callback.answer("Marked as delivered")
+            await callback.answer("Отмечено как выполнено")
             await bot.send_message(
                 int(deal["buyer_id"]),
-                f"Deal #{deal_id} marked as delivered.",
+                f"Сделка #{deal_id} отмечена как выполненная.",
                 reply_markup=deal_actions_keyboard(deal_id, "buyer", "delivered"),
             )
         elif action == "confirm":
             deal = confirm_deal(deal_id, callback.from_user.id)
-            await callback.answer("Deal completed")
+            await callback.answer("Сделка завершена")
             await bot.send_message(
                 int(deal["seller_id"]),
-                f"Deal #{deal_id} completed. Funds released.",
+                f"Сделка #{deal_id} завершена. Средства зачислены.",
             )
             await bot.send_message(
                 int(deal["buyer_id"]),
-                f"Deal #{deal_id} completed. You can leave a review in Mini App.",
+                f"Сделка #{deal_id} завершена. Вы можете оставить отзыв в Mini App.",
             )
         else:
-            await callback.answer("Unknown action", show_alert=True)
+            await callback.answer("Неизвестное действие", show_alert=True)
             return
     except ValueError as exc:
         await callback.answer(str(exc), show_alert=True)
@@ -437,13 +436,13 @@ async def handle_deal_callback(callback: CallbackQuery, bot: Bot) -> None:
 
 async def handle_admin_withdraws(message: Message) -> None:
     if message.from_user is None or message.from_user.id not in settings.admin_ids:
-        await message.answer("Admin only.")
+        await message.answer("Только для администратора.")
         return
     rows = list_pending_withdraw_requests()
     if not rows:
-        await message.answer("No pending withdraw requests.")
+        await message.answer("Нет заявок на вывод в ожидании.")
         return
-    lines = ["Pending withdrawals:"]
+    lines = ["Заявки на вывод в ожидании:"]
     for row in rows:
         lines.append(
             f"#{row['id']} user:{row['user_id']} amount:{row['amount']} {CURRENCY} destination:{row['destination']}"
@@ -453,25 +452,23 @@ async def handle_admin_withdraws(message: Message) -> None:
 
 async def handle_admin_approve(message: Message) -> None:
     if message.from_user is None or message.from_user.id not in settings.admin_ids:
-        await message.answer("Admin only.")
+        await message.answer("Только для администратора.")
         return
     text = (message.text or "").strip()
     parts = text.split(maxsplit=1)
     if len(parts) != 2 or not parts[1].isdigit():
-        await message.answer("Usage: /approve_withdraw <id>")
+        await message.answer("Использование: /approve_withdraw <id>")
         return
     request_id = int(parts[1])
     row = approve_withdraw_request(request_id, admin_note="accepted by administration")
     if not row:
-        await message.answer("Request not found or already processed.")
+        await message.answer("Заявка не найдена или уже обработана.")
         return
-    await message.answer(f"Withdraw #{request_id} approved.")
+    await message.answer(f"Вывод #{request_id} подтвержден.")
     await message.bot.send_message(
         int(row["user_id"]),
-        f"Withdraw #{request_id} status: accepted by administration.",
+        f"Вывод #{request_id}: статус 'принят администрацией'.",
     )
-
-
 def create_dispatcher() -> Dispatcher:
     dp = Dispatcher()
     dp.message.register(handle_start, CommandStart())
@@ -484,109 +481,3 @@ def create_dispatcher() -> Dispatcher:
     dp.callback_query.register(handle_deal_callback, F.data.startswith("deal:"))
     dp.message.register(handle_webapp_data, F.web_app_data)
     return dp
-=======
-import json
-from typing import Any
-
-from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
-from aiogram.types import (
-    KeyboardButton,
-    Message,
-    ReplyKeyboardMarkup,
-    WebAppInfo,
-)
-
-from app.config import settings
-from app.db import create_deal, get_user_by_username, upsert_user
-
-
-def build_main_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(
-                    text="Open Mini App",
-                    web_app=WebAppInfo(url=settings.webapp_url),
-                )
-            ]
-        ],
-        resize_keyboard=True,
-    )
-
-
-async def handle_start(message: Message) -> None:
-    if message.from_user is None:
-        return
-
-    upsert_user(
-        telegram_id=message.from_user.id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name or "User",
-    )
-
-    await message.answer(
-        "You are connected.\nUse Mini App button to create a deal invitation.",
-        reply_markup=build_main_keyboard(),
-    )
-
-
-async def handle_webapp_data(message: Message, bot: Bot) -> None:
-    if message.from_user is None or message.web_app_data is None:
-        return
-
-    upsert_user(
-        telegram_id=message.from_user.id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name or "User",
-    )
-
-    payload_raw = message.web_app_data.data
-    try:
-        payload: dict[str, Any] = json.loads(payload_raw)
-    except json.JSONDecodeError:
-        await message.answer("Invalid data from Mini App.")
-        return
-
-    target_username = str(payload.get("target_username", "")).strip().lstrip("@")
-    if not target_username:
-        await message.answer("Username is empty.")
-        return
-
-    target_user = get_user_by_username(target_username)
-    if not target_user:
-        await message.answer(
-            f"@{target_username} not found in bot.\n"
-            "Ask this user to run /start first."
-        )
-        return
-
-    if target_user.telegram_id == message.from_user.id:
-        await message.answer("You cannot create a deal with yourself.")
-        return
-
-    deal_id = create_deal(message.from_user.id, target_user.telegram_id)
-    sender_username = message.from_user.username or str(message.from_user.id)
-
-    await bot.send_message(
-        chat_id=target_user.telegram_id,
-        text=(
-            "New deal invitation\n\n"
-            f"Deal ID: {deal_id}\n"
-            f"From: @{sender_username}\n\n"
-            "Open Mini App to continue."
-        ),
-        reply_markup=build_main_keyboard(),
-    )
-
-    await message.answer(
-        f"Invitation sent to @{target_username}. Deal ID: {deal_id}",
-    )
-
-
-def create_dispatcher() -> Dispatcher:
-    dp = Dispatcher()
-    dp.message.register(handle_start, CommandStart())
-    dp.message.register(handle_webapp_data, F.web_app_data)
-    return dp
->>>>>>> 812b10437b3ace4a467d917045a8e96128a6b6a4

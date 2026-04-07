@@ -1,69 +1,68 @@
-<<<<<<< HEAD
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FunPay Deals</title>
+  <title>Сделки FunPay</title>
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <main class="container">
     <header class="header">
-      <h1>FunPay Deals</h1>
-      <p>Secure escrow trades, wallet and reviews.</p>
+      <h1>Сделки FunPay</h1>
+      <p>Безопасные сделки, баланс и отзывы.</p>
     </header>
 
     <nav class="tabs">
-      <button class="tab active" data-tab="deals">Deals</button>
-      <button class="tab" data-tab="balance">Balance</button>
-      <button class="tab" data-tab="reviews">Reviews</button>
-      <button class="tab" data-tab="withdraw">Withdraw</button>
+      <button type="button" class="tab active" data-tab="deals">Сделки</button>
+      <button type="button" class="tab" data-tab="balance">Баланс</button>
+      <button type="button" class="tab" data-tab="reviews">Отзывы</button>
+      <button type="button" class="tab" data-tab="withdraw">Вывод</button>
     </nav>
 
     <section class="panel active" id="panel-deals">
-      <h2>Create Deal</h2>
-      <label for="dealUsername">Seller username</label>
+      <h2>Создать сделку</h2>
+      <label for="dealUsername">Username продавца</label>
       <input id="dealUsername" type="text" placeholder="@seller_username" maxlength="64" />
-      <label for="dealAmount">Amount (USDT)</label>
+      <label for="dealAmount">Сумма (RUB)</label>
       <input id="dealAmount" type="number" min="1" step="1" placeholder="100" />
-      <label for="dealDescription">Description</label>
-      <textarea id="dealDescription" placeholder="What should be delivered?"></textarea>
-      <button id="createDealBtn" type="button">Create escrow deal</button>
+      <label for="dealDescription">Описание</label>
+      <textarea id="dealDescription" placeholder="Что нужно выполнить?"></textarea>
+      <button id="createDealBtn" type="button">Создать эскроу-сделку</button>
     </section>
 
     <section class="panel" id="panel-balance">
-      <h2>Top Up</h2>
-      <label for="topupAmount">Amount (USDT)</label>
+      <h2>Пополнение</h2>
+      <label for="topupAmount">Сумма (RUB)</label>
       <input id="topupAmount" type="number" min="1" step="1" placeholder="50" />
       <div class="row">
-        <button id="topupStarsBtn" type="button">Top up with Stars</button>
-        <button id="topupCryptoBtn" type="button" class="secondary">Top up with CryptoBot</button>
+        <button id="topupStarsBtn" type="button">Пополнить через Stars</button>
+        <button id="topupCryptoBtn" type="button" class="secondary">Пополнить через CryptoBot</button>
       </div>
-      <label for="cryptoInvoiceId">CryptoBot invoice id (for check)</label>
+      <label for="cryptoInvoiceId">ID счета CryptoBot (для проверки)</label>
       <input id="cryptoInvoiceId" type="text" placeholder="invoice id" />
-      <button id="checkCryptoBtn" type="button">Check CryptoBot payment</button>
+      <button id="checkCryptoBtn" type="button">Проверить оплату CryptoBot</button>
     </section>
 
     <section class="panel" id="panel-reviews">
-      <h2>Leave Review</h2>
-      <label for="reviewDealId">Deal id</label>
+      <h2>Оставить отзыв</h2>
+      <label for="reviewDealId">ID сделки</label>
       <input id="reviewDealId" type="number" min="1" step="1" placeholder="12" />
-      <label for="reviewRating">Rating (1-5)</label>
+      <label for="reviewRating">Оценка (1-5)</label>
       <input id="reviewRating" type="number" min="1" max="5" step="1" placeholder="5" />
-      <label for="reviewText">Text</label>
-      <textarea id="reviewText" placeholder="Describe your experience"></textarea>
-      <button id="sendReviewBtn" type="button">Send review</button>
+      <label for="reviewText">Текст</label>
+      <textarea id="reviewText" placeholder="Опишите ваш опыт"></textarea>
+      <button id="sendReviewBtn" type="button">Отправить отзыв</button>
     </section>
 
     <section class="panel" id="panel-withdraw">
-      <h2>Withdraw</h2>
-      <label for="withdrawAmount">Amount (USDT)</label>
+      <h2>Вывод</h2>
+      <label for="withdrawAmount">Сумма (RUB)</label>
       <input id="withdrawAmount" type="number" min="1" step="1" placeholder="70" />
-      <label for="withdrawDestination">CryptoBot destination</label>
+      <label for="withdrawDestination">Реквизиты CryptoBot</label>
       <input id="withdrawDestination" type="text" placeholder="@cryptobot_or_wallet" />
-      <button id="withdrawBtn" type="button">Create withdraw request</button>
+      <button id="withdrawBtn" type="button">Создать заявку на вывод</button>
     </section>
 
     <p id="status" class="status"></p>
@@ -72,32 +71,3 @@
   <script src="./script.js"></script>
 </body>
 </html>
-=======
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Deal Mini App</title>
-    <link rel="stylesheet" href="./styles.css" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  </head>
-  <body>
-    <main class="card">
-      <h1>Create Deal</h1>
-      <p class="hint">
-        Enter Telegram username. If this user started the bot, invitation will be
-        sent.
-      </p>
-
-      <label for="username">Target username</label>
-      <input id="username" type="text" placeholder="@username" maxlength="64" />
-
-      <button id="createDealBtn" type="button">Send invitation</button>
-      <p id="status" class="status"></p>
-    </main>
-
-    <script src="./script.js"></script>
-  </body>
-</html>
->>>>>>> 812b10437b3ace4a467d917045a8e96128a6b6a4

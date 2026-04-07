@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -126,7 +125,7 @@ def init_db() -> None:
                 deal_id INTEGER,
                 tx_type TEXT NOT NULL,
                 amount INTEGER NOT NULL,
-                currency TEXT NOT NULL DEFAULT 'USDT',
+                currency TEXT NOT NULL DEFAULT 'RUB',
                 status TEXT NOT NULL DEFAULT 'done',
                 meta_json TEXT NOT NULL DEFAULT '{}',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -176,7 +175,7 @@ def init_db() -> None:
                 provider TEXT NOT NULL,
                 external_id TEXT NOT NULL,
                 amount INTEGER NOT NULL,
-                currency TEXT NOT NULL DEFAULT 'USDT',
+                currency TEXT NOT NULL DEFAULT 'RUB',
                 status TEXT NOT NULL DEFAULT 'pending',
                 payload_json TEXT NOT NULL DEFAULT '{}',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -262,7 +261,7 @@ def add_wallet_transaction(
     user_id: int,
     tx_type: str,
     amount: int,
-    currency: str = "USDT",
+    currency: str = "RUB",
     deal_id: Optional[int] = None,
     status: str = "done",
     meta: Optional[dict] = None,
@@ -293,7 +292,7 @@ def create_deal(buyer_id: int, seller_id: int, amount: int, description: str) ->
         conn.execute(
             """
             INSERT INTO wallet_transactions (user_id, deal_id, tx_type, amount, currency, status, meta_json)
-            VALUES (?, ?, ?, ?, 'USDT', 'done', ?)
+            VALUES (?, ?, ?, ?, 'RUB', 'done', ?)
             """,
             (buyer_id, deal_id, TX_HOLD, -amount, json.dumps({"reason": "deal_hold"})),
         )
@@ -438,7 +437,7 @@ def create_withdraw_request(user_id: int, amount: int, destination: str) -> int:
         conn.execute(
             """
             INSERT INTO wallet_transactions (user_id, tx_type, amount, currency, status, meta_json)
-            VALUES (?, ?, ?, 'USDT', 'done', ?)
+            VALUES (?, ?, ?, 'RUB', 'done', ?)
             """,
             (user_id, TX_WITHDRAW_REQUEST, -amount, json.dumps({"destination": destination})),
         )
@@ -480,7 +479,7 @@ def approve_withdraw_request(request_id: int, admin_note: str = "") -> Optional[
         conn.execute(
             """
             INSERT INTO wallet_transactions (user_id, tx_type, amount, currency, status, meta_json)
-            VALUES (?, ?, 0, 'USDT', 'done', ?)
+            VALUES (?, ?, 0, 'RUB', 'done', ?)
             """,
             (
                 int(request["user_id"]),
@@ -553,96 +552,3 @@ def list_wallet_transactions(user_id: int, limit: int = 15) -> list[sqlite3.Row]
             (user_id, limit),
         ).fetchall()
     return rows
-=======
-import sqlite3
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
-
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = BASE_DIR / "bot.db"
-
-
-@dataclass
-class User:
-    telegram_id: int
-    username: str
-    first_name: str
-
-
-def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_db() -> None:
-    with get_connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                telegram_id INTEGER PRIMARY KEY,
-                username TEXT UNIQUE,
-                first_name TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS deals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                creator_id INTEGER NOT NULL,
-                target_id INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (creator_id) REFERENCES users(telegram_id),
-                FOREIGN KEY (target_id) REFERENCES users(telegram_id)
-            )
-            """
-        )
-        conn.commit()
-
-
-def upsert_user(telegram_id: int, username: Optional[str], first_name: str) -> None:
-    normalized_username = (username or "").strip().lower()
-    with get_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO users (telegram_id, username, first_name)
-            VALUES (?, ?, ?)
-            ON CONFLICT(telegram_id) DO UPDATE SET
-                username = excluded.username,
-                first_name = excluded.first_name
-            """,
-            (telegram_id, normalized_username, first_name),
-        )
-        conn.commit()
-
-
-def get_user_by_username(username: str) -> Optional[User]:
-    normalized = username.strip().lstrip("@").lower()
-    with get_connection() as conn:
-        row = conn.execute(
-            "SELECT telegram_id, username, first_name FROM users WHERE username = ?",
-            (normalized,),
-        ).fetchone()
-    if not row:
-        return None
-    return User(
-        telegram_id=row["telegram_id"],
-        username=row["username"],
-        first_name=row["first_name"],
-    )
-
-
-def create_deal(creator_id: int, target_id: int) -> int:
-    with get_connection() as conn:
-        cursor = conn.execute(
-            "INSERT INTO deals (creator_id, target_id) VALUES (?, ?)",
-            (creator_id, target_id),
-        )
-        conn.commit()
-        return int(cursor.lastrowid)
->>>>>>> 812b10437b3ace4a467d917045a8e96128a6b6a4
