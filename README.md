@@ -61,6 +61,15 @@ pip install -r requirements.txt
 python main.py
 ```
 
+Бот запустится с API сервером на http://localhost:8080 для Mini App.
+
+## API Endpoints
+
+- `GET /api/profile?user_id=<id>` — профиль пользователя
+- `GET /api/deals?user_id=<id>&status_filter=active` — список сделок
+- `GET /api/deal/{deal_id}?user_id=<id>` — детали сделки
+- `GET /api/chat/{deal_id}?user_id=<id>` — чат сделки
+
 ## Команды бота
 
 - `/start` — регистрация и кнопка Mini App.
