@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FunPay Deals</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>FunPay Deals</h1>
+      <p>Secure escrow trades, wallet and reviews.</p>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="deals">Deals</button>
+      <button class="tab" data-tab="balance">Balance</button>
+      <button class="tab" data-tab="reviews">Reviews</button>
+      <button class="tab" data-tab="withdraw">Withdraw</button>
+    </nav>
+
+    <section class="panel active" id="panel-deals">
+      <h2>Create Deal</h2>
+      <label for="dealUsername">Seller username</label>
+      <input id="dealUsername" type="text" placeholder="@seller_username" maxlength="64" />
+      <label for="dealAmount">Amount (USDT)</label>
+      <input id="dealAmount" type="number" min="1" step="1" placeholder="100" />
+      <label for="dealDescription">Description</label>
+      <textarea id="dealDescription" placeholder="What should be delivered?"></textarea>
+      <button id="createDealBtn" type="button">Create escrow deal</button>
+    </section>
+
+    <section class="panel" id="panel-balance">
+      <h2>Top Up</h2>
+      <label for="topupAmount">Amount (USDT)</label>
+      <input id="topupAmount" type="number" min="1" step="1" placeholder="50" />
+      <div class="row">
+        <button id="topupStarsBtn" type="button">Top up with Stars</button>
+        <button id="topupCryptoBtn" type="button" class="secondary">Top up with CryptoBot</button>
+      </div>
+      <label for="cryptoInvoiceId">CryptoBot invoice id (for check)</label>
+      <input id="cryptoInvoiceId" type="text" placeholder="invoice id" />
+      <button id="checkCryptoBtn" type="button">Check CryptoBot payment</button>
+    </section>
+
+    <section class="panel" id="panel-reviews">
+      <h2>Leave Review</h2>
+      <label for="reviewDealId">Deal id</label>
+      <input id="reviewDealId" type="number" min="1" step="1" placeholder="12" />
+      <label for="reviewRating">Rating (1-5)</label>
+      <input id="reviewRating" type="number" min="1" max="5" step="1" placeholder="5" />
+      <label for="reviewText">Text</label>
+      <textarea id="reviewText" placeholder="Describe your experience"></textarea>
+      <button id="sendReviewBtn" type="button">Send review</button>
+    </section>
+
+    <section class="panel" id="panel-withdraw">
+      <h2>Withdraw</h2>
+      <label for="withdrawAmount">Amount (USDT)</label>
+      <input id="withdrawAmount" type="number" min="1" step="1" placeholder="70" />
+      <label for="withdrawDestination">CryptoBot destination</label>
+      <input id="withdrawDestination" type="text" placeholder="@cryptobot_or_wallet" />
+      <button id="withdrawBtn" type="button">Create withdraw request</button>
+    </section>
+
+    <p id="status" class="status"></p>
+  </main>
+
+  <script src="./script.js"></script>
+</body>
+</html>
