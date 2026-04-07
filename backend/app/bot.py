@@ -48,18 +48,11 @@ STARS_PAYLOAD_PREFIX = "stars_topup:"
 CURRENCY = "RUB"
 
 
-def build_main_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(
-                    text="Открыть FunPay",
-                    web_app=WebAppInfo(url=settings.webapp_url),
-                )
-            ]
-        ],
-        resize_keyboard=True,
-    )
+def build_main_keyboard() -> InlineKeyboardMarkup:
+    # Use inline web_app button to avoid Telegram service message
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Открыть FunPay", web_app=WebAppInfo(url=settings.webapp_url))]
+    ])
 
 
 def deal_actions_keyboard(deal_id: int, role: str, status: str) -> Optional[InlineKeyboardMarkup]:
@@ -341,7 +334,22 @@ async def process_webapp_action(message: Message, payload: dict[str, Any], bot: 
         return
 
     if action == "list_chat_messages":
-        # Reserved for future API transport without chat spam.
+        deal_id = parse_int(payload, "deal_id")
+        try:
+            rows = list_chat_messages(deal_id, user_id)
+        except ValueError:
+            await message.answer("Чат не найден или нет доступа.")
+            return
+        # Send compact chat history to user as messages (useful as fallback)
+        if not rows:
+            await message.answer("Чат пуст.")
+            return
+        lines = [f"Чат по сделке #{deal_id}:\n"]
+        for r in rows:
+            uname = r.get("username") or str(r.get("sender_id"))
+            lines.append(f"{uname}: {r['text']}")
+        # send as one message to avoid spam
+        await message.answer("\n".join(lines))
         return
 
     if action == "topup_stars":

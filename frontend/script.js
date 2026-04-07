@@ -89,11 +89,22 @@ function openDeal(dealId) {
       <button type="button" id="confirmDealBtn">Подтвердить</button>
       <button type="button" id="cancelDealBtn" class="secondary">Отменить</button>
     </div>
+    <div class="grid2">
+      <button type="button" id="refundDealBtn" class="secondary">Возврат</button>
+      <button type="button" id="refreshChatBtn">Обновить чат</button>
+    </div>
   `;
   document.getElementById("acceptDealBtn").onclick = () => sendAction({ action: "accept_deal", deal_id: dealId });
   document.getElementById("deliverDealBtn").onclick = () => sendAction({ action: "mark_delivered", deal_id: dealId });
   document.getElementById("confirmDealBtn").onclick = () => sendAction({ action: "confirm_deal", deal_id: dealId });
   document.getElementById("cancelDealBtn").onclick = () => sendAction({ action: "cancel_deal", deal_id: dealId });
+  document.getElementById("refundDealBtn").onclick = () => sendAction({ action: "cancel_deal", deal_id: dealId });
+  document.getElementById("refreshChatBtn").onclick = () => {
+    // Request server to send chat history as fallback message
+    sendAction({ action: "list_chat_messages", deal_id: dealId });
+    // Also re-render local chat
+    renderChat(dealId);
+  };
   showScreen("deal-view");
 }
 
@@ -157,7 +168,24 @@ document.getElementById("withdrawBtn").onclick = () => {
 document.getElementById("sendChatBtn").onclick = () => {
   const text = strValue("chatMessageInput");
   if (!text || !currentDealId) return;
+  // send to bot
   sendAction({ action: "send_chat_message", deal_id: currentDealId, text });
+  // persist locally for immediate UI update
+  try {
+    const msg = {
+      sender_id: tg?.initDataUnsafe?.user?.id || 'me',
+      username: tg?.initDataUnsafe?.user?.username || (tg?.initDataUnsafe?.user?.first_name || 'me'),
+      text: text,
+      ts: Date.now(),
+    };
+    const key = `chat:${currentDealId}`;
+    const arr = JSON.parse(localStorage.getItem(key) || '[]');
+    arr.push(msg);
+    localStorage.setItem(key, JSON.stringify(arr));
+    renderChat(currentDealId);
+  } catch (e) {
+    console.error('chat save', e);
+  }
   document.getElementById("chatMessageInput").value = "";
 };
 
